@@ -1,0 +1,28 @@
+{
+  "generated_at": "2026-11-17T13:14:49.247113+00:00",
+  "python": "3.14.7",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "sizes": [
+    32,
+    64,
+    128
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "repeats": 10,
+  "trial_count": 600,
+  "region_rule": "8x8 tiles split into connected components",
+  "timing": "Per-query time; map loading and region preprocessing reported separately.",
+  "variability": "Sample standard deviation across per-map means.",
+  "validation": "Every route checked; flat costs match independent BFS distances."
+}

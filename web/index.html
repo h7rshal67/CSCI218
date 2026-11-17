@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CSCI218 · Multi-Layered Search</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<header class="masthead">
+  <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="brand-text">CSCI218 <span>/ PROJECT H</span></div>
+  <span class="local-badge"><span></span> Local simulation</span>
+</header>
+<main>
+  <div class="intro">
+    <div><p class="eyebrow">FOUNDATIONS OF ARTIFICIAL INTELLIGENCE</p>
+      <h1>Multi-Layered Search<span>.</span></h1>
+      <p class="subtitle">One map. Two search strategies. See the route and the work behind it.</p>
+    </div>
+    <div class="intro-note"><b>01 / Explore</b><span>Compare paths, introduce a closure,<br>then test how the search scales.</span></div>
+  </div>
+
+  <section class="controls" aria-label="Simulation controls">
+    <div class="field map-field"><label>Environment</label>
+      <div class="segmented">
+        <button id="road-btn" class="selected" aria-pressed="true">Dubai roads</button>
+        <button id="grid-btn" aria-pressed="false">Obstacle grid</button>
+      </div>
+    </div>
+    <div id="road-fields" class="field-group">
+      <div class="field"><label for="start">Start hub</label><select id="start"></select></div>
+      <span class="field-arrow" aria-hidden="true">→</span>
+      <div class="field"><label for="goal">Destination</label><select id="goal"></select></div>
+    </div>
+    <div id="grid-fields" class="field-group" hidden>
+      <div class="field"><label for="size">Grid size</label>
+        <select id="size"><option value="32">32 × 32</option><option value="64">64 × 64</option><option value="128">128 × 128</option></select>
+      </div>
+      <div class="field"><label for="seed">Map seed</label>
+        <select id="seed"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+      </div>
+    </div>
+    <div class="field scenario-field"><label for="scenario">Closure scenario</label>
+      <select id="scenario">
+        <option value="none">No closure</option>
+        <option value="targeted">Block the shortest route</option>
+        <option value="hub" id="hub-option">Original hub-route closure · 60 m</option>
+        <option value="isolate">Close every exit at the start</option>
+      </select>
+    </div>
+    <button id="run-btn" class="primary">Run comparison <span aria-hidden="true">↗</span></button>
+  </section>
+
+  <div class="scene-bar">
+    <span id="scene-info">Loading the packaged map…</span>
+    <div class="display-controls">
+      <label><input id="show-regions" type="checkbox" checked> Regions</label>
+      <label><input id="show-explored" type="checkbox" checked> Explored nodes</label>
+      <button id="replay-btn" disabled>↻ Replay search</button>
+    </div>
+  </div>
+  <p id="status" class="status" role="status" aria-live="polite">Preparing the offline demonstration…</p>
+
+  <section class="comparison" aria-label="Algorithm comparison">
+    <article class="algorithm-panel flat-panel">
+      <div class="panel-heading"><div><p class="eyebrow"><span class="dot flat-dot"></span> SEARCH THE WHOLE MAP</p><h2>Flat A*</h2></div>
+        <span id="flat-status" class="result-badge">Ready</span></div>
+      <div class="metrics">
+        <div><span class="metric-label">Route cost</span><strong id="flat-cost">—</strong></div>
+        <div><span class="metric-label">Detailed expansions</span><strong id="flat-nodes">—</strong></div>
+        <div><span class="metric-label">Query time</span><strong id="flat-time">—</strong></div>
+      </div>
+      <div class="map-wrap"><canvas id="flat-map" aria-label="Flat A star route and explored nodes"></canvas>
+        <div class="map-toolbar"><button id="flat-fit">Fit map</button><button id="flat-route-fit">Fit route</button></div>
+        <span class="map-hint">Scroll to zoom · drag to pan</span>
+      </div>
+      <div class="panel-footer"><span><i class="legend-line flat-line"></i> Full-map route</span><span id="flat-detail">No region restriction</span></div>
+    </article>
+
+    <article class="algorithm-panel tier-panel">
+      <div class="panel-heading"><div><p class="eyebrow"><span class="dot tier-dot"></span> REGIONS FIRST, DETAIL SECOND</p><h2>Two-tier A*</h2></div>
+        <span id="tier-status" class="result-badge">Ready</span></div>
+      <div class="metrics">
+        <div><span class="metric-label">Route cost</span><strong id="tier-cost">—</strong></div>
+        <div><span class="metric-label">Detailed expansions</span><strong id="tier-nodes">—</strong></div>
+        <div><span class="metric-label">Query time</span><strong id="tier-time">—</strong></div>
+      </div>
+      <div class="map-wrap"><canvas id="tier-map" aria-label="Two-tier A star route and explored nodes"></canvas>
+        <div class="map-toolbar"><button id="tier-fit">Fit map</button><button id="tier-route-fit">Fit route</button></div>
+        <span class="map-hint">Scroll to zoom · drag to pan</span>
+      </div>
+      <div class="panel-footer"><span><i class="legend-line tier-line"></i> Two-tier route</span><span id="tier-detail">Waiting for comparison</span></div>
+    </article>
+  </section>
+
+  <section class="interpretation" aria-label="Interpretation">
+    <div class="finding"><span class="finding-icon" aria-hidden="true">↗</span><div><h3 id="finding-title">A fair comparison starts with shared inputs.</h3><p id="finding-text">Both algorithms use identical nodes, edge costs, start and goal, and closed roads.</p></div></div>
+    <div class="run-facts">
+      <div><span>Abstract expansions</span><b id="abstract-count">—</b></div>
+      <div><span>Region preprocessing</span><b id="prep-time">—</b></div>
+      <div><span>Closed directed edges</span><b id="closed-count">0</b></div>
+      <div><span>Path checks</span><b id="validation-state">Pending</b></div>
+    </div>
+    <p id="corridor-plan" class="method-note"></p>
+    <p id="scenario-note" class="method-note"></p>
+    <p class="method-note">Query time includes region selection, filtering and all detailed-search attempts for two-tier A*. Map loading and region preprocessing are excluded from query time and reported separately. Single-run times are illustrative; use the scaling test for averages.</p>
+  </section>
+
+  <section class="benchmark-section">
+    <div class="benchmark-heading"><div><p class="eyebrow">02 / TEST THE SCALE</p><h2>Does the advantage hold?</h2><p>32 × 32, 64 × 64 and 128 × 128 grids · 10 seeds · 10 repeats · the same integrated algorithms.</p></div>
+      <button id="benchmark-btn" class="secondary">Run 600-search benchmark <span aria-hidden="true">→</span></button></div>
+    <div id="benchmark-progress" class="benchmark-progress" hidden role="status">Running repeated searches and checking every path…</div>
+    <div id="benchmark-results" hidden>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Grid</th><th>Method</th><th>Detailed nodes</th><th>Abstract nodes</th><th>Query time</th><th>Route cost</th><th>Region prep</th></tr></thead>
+        <tbody id="benchmark-body"></tbody>
+      </table></div>
+      <div class="benchmark-foot"><span id="benchmark-caption"></span><div><a href="/results/trials.csv">Download trials CSV ↗</a><a href="/results/summary.csv">Download summary CSV ↗</a></div></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>CSCI218 / Project H</b><br>Offline road case study + grid scaling experiments.</p>
+    <p>Road data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.<br>Static distance-based simulation; no live traffic.</p>
+  </footer>
+</main>
+</body>
+</html>

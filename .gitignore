@@ -8,3 +8,6 @@ venv/
 
 # Jupyter temporary files
 .ipynb_checkpoints/
+
+# Local server diagnostic logs
+*.log
