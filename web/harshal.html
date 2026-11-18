@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSCI218 Search Demo</title>
+    <link rel="stylesheet" href="harshal.css">
+</head>
+<body>
+    <h1>Multi-Layered Search</h1>
+
+    <p>Compare flat A* and two-tier search on the same map.</p>
+    <p>
+        <label for="start">Start:</label>
+        <select id="start">
+            <option value="Boxpark">Boxpark</option>
+            <option value="Port de La Mer">Port de La Mer</option>
+        </select>
+    
+        <label for="goal">Destination:</label>
+        <select id="goal">
+            <option value="Boxpark">Boxpark</option>
+            <option value="Port de La Mer" selected>Port de La Mer</option>
+        </select>
+    </p>
+    
+
+    <button id="run-button" type="button">Run comparison</button>
+
+    <p id="status">Ready to begin.</p>
+</body>
+<script src="harshal.js"></script>
+</html>
