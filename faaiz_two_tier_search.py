@@ -1,0 +1,182 @@
+"""
+faaiz_two_tier_search.py  -  Faaiz's two-tier search, rewritten for Humna's map.
+
+Why this file exists
+--------------------
+Faaiz's earlier notebook built its own graph (downloaded with OSMnx, regions made
+with K-Means). Humna's map uses a different representation, so the two parts
+could not be run on the same data. This version works directly on Humna's
+`RoadMap` (osm_map.py) and uses ONLY the fields it already provides:
+
+    road_map.adj     node -> {neighbour: metres}      (directed roads)
+    road_map.coords  node -> (lat, lon)
+    road_map.area    node -> hub name (the region of that node)
+
+Closed roads are directed (u, v) pairs, exactly what RoadMap.edges_near() returns.
+
+Strategy (same as the original notebook)
+----------------------------------------
+Level 1: A* over the region graph picks the regions to pass through.
+Level 2: A* on the real roads, using only nodes inside those regions.
+If that fails -> widen to neighbouring regions -> finally search the whole map.
+"""
+import heapq
+import math
+import time
+
+from osm_map import haversine_m
+
+
+# ---------------------------------------------------------------- level 1 ----
+def build_region_graph(road_map, blocked=frozenset(), *, distance=None):
+    """Return (members, centers, region_adj) built from Humna's road_map.area."""
+    members = {}
+    for node, region in road_map.area.items():
+        members.setdefault(region, []).append(node)
+
+    centers = {
+        r: (sum(road_map.coords[n][0] for n in ns) / len(ns),
+            sum(road_map.coords[n][1] for n in ns) / len(ns))
+        for r, ns in members.items()
+    }
+
+    region_adj = {r: {} for r in members}
+    for u, neighbours in road_map.adj.items():
+        for v in neighbours:
+            if (u, v) in blocked:
+                continue                      # closed roads never join regions
+            a, b = road_map.area[u], road_map.area[v]
+            if a != b:
+                region_adj[a][b] = (distance(centers[a], centers[b]) if distance is not None else haversine_m(*centers[a], *centers[b]))
+    return members, centers, region_adj
+
+
+def region_search(centers, region_adj, start_region, goal_region, *, distance=None):
+    """A* over regions. Returns (list of regions, nodes expanded)."""
+    if start_region == goal_region:
+        return [start_region], 1
+
+    def h(r):
+        return (distance(centers[r], centers[goal_region]) if distance is not None else haversine_m(*centers[r], *centers[goal_region]))
+
+    heap = [(h(start_region), 0.0, start_region)]
+    best, came, expanded = {start_region: 0.0}, {}, 0
+    while heap:
+        _, g, r = heapq.heappop(heap)
+        if g > best.get(r, math.inf) + 1e-9:
+            continue
+        expanded += 1
+        if r == goal_region:
+            path = [r]
+            while path[-1] in came:
+                path.append(came[path[-1]])
+            return path[::-1], expanded
+        for nb, w in region_adj[r].items():
+            ng = g + w
+            if ng < best.get(nb, math.inf):
+                best[nb], came[nb] = ng, r
+                heapq.heappush(heap, (ng + h(nb), ng, nb))
+    return [], expanded
+
+
+# ---------------------------------------------------------------- level 2 ----
+def detailed_astar(road_map, start, goal, blocked=frozenset(), allowed=None, *,
+                   heuristic=None, trace=None):
+    """A* on the real roads. allowed = set of nodes it may use (None = all)."""
+    if start not in road_map.adj or goal not in road_map.adj:
+        raise ValueError('start and goal must be road nodes')
+    if allowed is not None and (start not in allowed or goal not in allowed):
+        return None, None, 0
+    if start == goal:
+        return [start], 0.0, 0
+    goal_pos = road_map.coords[goal]
+
+    def h(n):
+        return (heuristic(n) if heuristic is not None else haversine_m(*road_map.coords[n], *goal_pos))
+
+    heap = [(h(start), 0.0, 0, start)]
+    best, came, expanded = {start: 0.0}, {}, 0
+    next_id = 1
+    while heap:
+        _, g, _, u = heapq.heappop(heap)
+        if g > best.get(u, math.inf) + 1e-9:
+            continue
+        expanded += 1
+        if trace is not None:
+            trace.append(u)
+        if u == goal:
+            path = [u]
+            while path[-1] in came:
+                path.append(came[path[-1]])
+            return path[::-1], g, expanded
+        for v, w in road_map.adj[u].items():
+            if (u, v) in blocked or (allowed is not None and v not in allowed):
+                continue
+            if not math.isfinite(w) or w < 0:
+                raise ValueError(f'Invalid road edge cost: {u} -> {v}: {w}')
+            ng = g + w
+            if ng + 1e-9 < best.get(v, math.inf):
+                best[v], came[v] = ng, u
+                heapq.heappush(heap, (ng + h(v), ng, next_id, v))
+                next_id += 1
+    return None, None, expanded
+
+
+# ------------------------------------------------------------ the two tiers ----
+def two_tier_search(road_map, start, goal, blocked=()):
+    """Faaiz's two-tier search on Humna's RoadMap.
+
+    Returns the search route, timings and counts. `nodes_expanded` counts
+    detailed road expansions across ALL attempts, comparable to flat A*;
+    `region_nodes_expanded` separately counts abstract region expansions.
+    """
+    t0 = time.perf_counter()
+    blocked = frozenset(blocked)
+    if start not in road_map.adj or goal not in road_map.adj:
+        raise ValueError('start and goal must be road nodes')
+    members, centers, region_adj = build_region_graph(road_map, blocked)
+    preprocessing_ms = (time.perf_counter() - t0) * 1000
+
+    corridor, region_expanded = region_search(
+        centers, region_adj, road_map.area[start], road_map.area[goal])
+    total_expanded = 0
+    attempt_expansions = []
+
+    attempts = []
+    if corridor:
+        chosen = set(corridor)
+        attempts.append(("Chosen regions", chosen))
+        wider = set(chosen)
+        for r in chosen:
+            wider.update(region_adj[r])
+        for r, nbs in region_adj.items():          # regions that lead INTO the corridor
+            if chosen.intersection(nbs):
+                wider.add(r)
+        if wider != chosen:
+            attempts.append(("Widened to neighbouring regions", wider))
+    attempts.append(("Whole-map fallback", None))
+
+    for mode, regions in attempts:
+        allowed = None if regions is None else {
+            n for r in regions for n in members[r]}
+        path, cost, expanded = detailed_astar(road_map, start, goal, blocked, allowed)
+        total_expanded += expanded
+        attempt_expansions.append({'mode': mode, 'nodes_expanded': expanded})
+        if path is not None or regions is None:
+            if path is not None:
+                actual = sum(road_map.adj[a][b] for a, b in zip(path, path[1:]))
+                if abs(actual - cost) > 1e-5 or any((a, b) in blocked for a, b in zip(path, path[1:])):
+                    raise AssertionError('Search returned an invalid or blocked route')
+            return {
+                "found": path is not None,
+                "path": path or [],
+                "cost_m": cost,
+                "nodes_expanded": total_expanded,
+                "region_nodes_expanded": region_expanded,
+                "total_nodes_expanded": total_expanded + region_expanded,
+                "attempt_expansions": attempt_expansions,
+                "preprocessing_ms": preprocessing_ms,
+                "runtime_ms": (time.perf_counter() - t0) * 1000,
+                "region_path": corridor,
+                "mode": mode,
+            }
