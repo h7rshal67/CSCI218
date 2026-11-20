@@ -116,6 +116,9 @@ class DemoHandler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(error)}, 500)
             return
         files = {
+            "/harshal.html": ("web/harshal.html", "text/html; charset=utf-8"),
+            "/harshal.js": ("web/harshal.js", "text/javascript; charset=utf-8"),
+            "/harshal.css": ("web/harshal.css", "text/css; charset=utf-8"),
             "/": ("web/index.html", "text/html; charset=utf-8"),
             "/app.js": ("web/app.js", "text/javascript; charset=utf-8"),
             "/styles.css": ("web/styles.css", "text/css; charset=utf-8"),

@@ -35,3 +35,19 @@ select {
     padding: 8px;
     margin-right: 16px;
 }
+table {
+    width: 100%;
+    margin-top: 24px;
+    border-collapse: collapse;
+    background: white;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #d8e1e8;
+}
+
+th {
+    background: #e7eef5;
+}
