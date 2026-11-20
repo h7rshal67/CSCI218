@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import heapq
 import math
 import time
-from typing import Hashable, Mapping
+from typing import Hashable
 
 Node = Hashable
 
@@ -25,11 +25,15 @@ class SearchResult:
     cost_m: float | None
     nodes_expanded: int
     runtime_ms: float
-    trace: list[Node] = field(default_factory=list)
+    expanded_trace: list[Node] = field(default_factory=list)
+    @property
+    def trace(self):
+        return self.expanded_trace
 
     def as_dict(self) -> dict:
         return {"found": self.found, "path": self.path, "cost_m": self.cost_m,
-                "nodes_expanded": self.nodes_expanded, "runtime_ms": self.runtime_ms}
+                "nodes_expanded": self.nodes_expanded, "runtime_ms": self.runtime_ms,
+                "expanded_trace": self.expanded_trace}
 
 
 def haversine_m(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -41,8 +45,10 @@ def haversine_m(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * 6371000.0 * math.asin(min(1.0, math.sqrt(x)))
 
 
-def flat_astar(road_map, start: Node, goal: Node, blocked=(), *, use_heuristic=True,
-               heuristic=None, allowed_nodes=None, collect_trace=False) -> SearchResult:
+def flat_astar(road_map, start: Node, goal: Node, blocked=(), *,
+               use_heuristic=True, allowed=None, trace=False,
+               heuristic=None, allowed_nodes=None,
+               collect_trace=False) -> SearchResult:
     """Find the minimum-distance route on the *whole* directed graph.
 
     Args:
@@ -50,11 +56,9 @@ def flat_astar(road_map, start: Node, goal: Node, blocked=(), *, use_heuristic=T
         start, goal: road node IDs (use road_map.hub_node[name] for named hubs).
         blocked: iterable of directed (from_node, to_node) closed road edges.
         use_heuristic: True uses haversine; False runs Dijkstra-like search.
-
-    Demo integration extensions: heuristic accepts a map-specific lower bound
-    (Manhattan on grids); allowed_nodes supports Faaiz's detailed corridor
-    search; collect_trace records real expansion events for replay. Original
-    baseline source is preserved in team_sources.
+        allowed: optional set of nodes used only for corridor-restricted searches.
+            Keep None for the genuine whole-map Flat A* baseline.
+        trace: collect expanded node IDs for the demo; off by default.
 
     Important: A* shortest-path optimality assumes that every edge weight is
     >= the geographic straight-line distance between its endpoints. This is
@@ -64,14 +68,21 @@ def flat_astar(road_map, start: Node, goal: Node, blocked=(), *, use_heuristic=T
     t0 = time.perf_counter()
     adj = road_map.adj
     coords = road_map.coords
+    if allowed is not None and allowed_nodes is not None and allowed != allowed_nodes:
+        raise ValueError("allowed and allowed_nodes must agree when both are supplied")
+
+    if allowed is None:
+        allowed = allowed_nodes
+
+    trace = trace or collect_trace
     if start not in adj or goal not in adj:
         raise ValueError("start and goal must be nodes in road_map.adj")
     if use_heuristic and heuristic is None and (start not in coords or goal not in coords):
         raise ValueError("Coordinates missing for start or goal")
+    if allowed is not None and (start not in allowed or goal not in allowed):
+        return SearchResult(False, [], None, 0, (time.perf_counter() - t0) * 1000)
 
     blocked_set = set(blocked)
-    if allowed_nodes is not None and (start not in allowed_nodes or goal not in allowed_nodes):
-        return SearchResult(False, [], None, 0, (time.perf_counter() - t0) * 1000)
     if start == goal:
         return SearchResult(True, [start], 0.0, 0, (time.perf_counter() - t0) * 1000)
 
@@ -86,25 +97,23 @@ def flat_astar(road_map, start: Node, goal: Node, blocked=(), *, use_heuristic=T
     queue = [(h(start), 0.0, 0, start)]
     counter = 1
     expanded = 0
-    trace = []
+    expanded_trace = []
     while queue:
         _, g, _, node = heapq.heappop(queue)
         if g > best_g[node] + 1e-9:
             continue
         expanded += 1
-        if collect_trace:
-            trace.append(node)
+        if trace:
+            expanded_trace.append(node)
         if node == goal:
             path = [goal]
             while path[-1] in previous:
                 path.append(previous[path[-1]])
             path.reverse()
             return SearchResult(True, path, g, expanded,
-                                (time.perf_counter() - t0) * 1000, trace)
+                                (time.perf_counter() - t0) * 1000, expanded_trace)
         for neighbor, distance_m in adj[node].items():
-            if allowed_nodes is not None and neighbor not in allowed_nodes:
-                continue
-            if (node, neighbor) in blocked_set:
+            if (node, neighbor) in blocked_set or (allowed is not None and neighbor not in allowed):
                 continue
             if not math.isfinite(distance_m) or distance_m < 0:
                 raise ValueError(f"Invalid edge cost {node}->{neighbor}: {distance_m}")
@@ -114,7 +123,8 @@ def flat_astar(road_map, start: Node, goal: Node, blocked=(), *, use_heuristic=T
                 previous[neighbor] = node
                 heapq.heappush(queue, (candidate + h(neighbor), candidate, counter, neighbor))
                 counter += 1
-    return SearchResult(False, [], None, expanded, (time.perf_counter() - t0) * 1000, trace)
+    return SearchResult(False, [], None, expanded,
+                        (time.perf_counter() - t0) * 1000, expanded_trace)
 
 
 def route_cost(road_map, path: list[Node], blocked=()) -> float:

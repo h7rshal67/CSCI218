@@ -71,6 +71,18 @@ class FlatAStarTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             flat_astar(self.map, "A", "C")
 
+    def test_allowed_nodes_and_trace(self):
+        allowed = {"A", "D", "C"}
+        result = flat_astar(self.map, "A", "C", allowed=allowed, trace=True)
+        self.assertEqual(result.path, ["A", "D", "C"])
+        self.assertEqual(result.nodes_expanded, len(result.expanded_trace))
+        self.assertEqual(result.expanded_trace[0], "A")
+
+    def test_allowed_nodes_must_include_endpoints(self):
+        result = flat_astar(self.map, "A", "C", allowed={"B", "C"})
+        self.assertFalse(result.found)
+        self.assertEqual(result.nodes_expanded, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
