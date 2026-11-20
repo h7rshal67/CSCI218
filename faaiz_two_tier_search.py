@@ -28,7 +28,7 @@ from osm_map import haversine_m
 
 
 # ---------------------------------------------------------------- level 1 ----
-def build_region_graph(road_map, blocked=frozenset()):
+def build_region_graph(road_map, blocked=frozenset(), *, distance=None):
     """Return (members, centers, region_adj) built from Humna's road_map.area."""
     members = {}
     for node, region in road_map.area.items():
@@ -47,17 +47,17 @@ def build_region_graph(road_map, blocked=frozenset()):
                 continue                      # closed roads never join regions
             a, b = road_map.area[u], road_map.area[v]
             if a != b:
-                region_adj[a][b] = haversine_m(*centers[a], *centers[b])
+                region_adj[a][b] = (distance(centers[a], centers[b]) if distance is not None else haversine_m(*centers[a], *centers[b]))
     return members, centers, region_adj
 
 
-def region_search(centers, region_adj, start_region, goal_region):
+def region_search(centers, region_adj, start_region, goal_region, *, distance=None):
     """A* over regions. Returns (list of regions, nodes expanded)."""
     if start_region == goal_region:
         return [start_region], 1
 
     def h(r):
-        return haversine_m(*centers[r], *centers[goal_region])
+        return (distance(centers[r], centers[goal_region]) if distance is not None else haversine_m(*centers[r], *centers[goal_region]))
 
     heap = [(h(start_region), 0.0, start_region)]
     best, came, expanded = {start_region: 0.0}, {}, 0
@@ -80,16 +80,19 @@ def region_search(centers, region_adj, start_region, goal_region):
 
 
 # ---------------------------------------------------------------- level 2 ----
-def detailed_astar(road_map, start, goal, blocked=frozenset(), allowed=None):
+def detailed_astar(road_map, start, goal, blocked=frozenset(), allowed=None, *,
+                   heuristic=None, trace=None):
     """A* on the real roads. allowed = set of nodes it may use (None = all)."""
     if start not in road_map.adj or goal not in road_map.adj:
         raise ValueError('start and goal must be road nodes')
     if allowed is not None and (start not in allowed or goal not in allowed):
         return None, None, 0
+    if start == goal:
+        return [start], 0.0, 0
     goal_pos = road_map.coords[goal]
 
     def h(n):
-        return haversine_m(*road_map.coords[n], *goal_pos)
+        return (heuristic(n) if heuristic is not None else haversine_m(*road_map.coords[n], *goal_pos))
 
     heap = [(h(start), 0.0, 0, start)]
     best, came, expanded = {start: 0.0}, {}, 0
@@ -99,6 +102,8 @@ def detailed_astar(road_map, start, goal, blocked=frozenset(), allowed=None):
         if g > best.get(u, math.inf) + 1e-9:
             continue
         expanded += 1
+        if trace is not None:
+            trace.append(u)
         if u == goal:
             path = [u]
             while path[-1] in came:

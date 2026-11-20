@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from flat_astar import SearchResult, flat_astar
 from worlds import connected_areas
 
+from types import SimpleNamespace
+import faaiz_two_tier_search as faaiz
 
 @dataclass
 class Hierarchy:
@@ -39,35 +41,34 @@ class HierarchicalResult(SearchResult):
 def prepare_hierarchy(world, blocked=()):
     before = time.perf_counter()
     closed = frozenset(blocked)
+
     area = (connected_areas(world.adj, world.base_areas, closed)
             if world.kind == "grid" and closed else world.area)
-    members = {}
-    for n, region in area.items():
-        members.setdefault(region, []).append(n)
-    centers = {
-        r: (sum(world.coords[n][0] for n in ns) / len(ns),
-            sum(world.coords[n][1] for n in ns) / len(ns))
-        for r, ns in members.items()
-    }
-    adj = {r: {} for r in members}
-    for u, neighbors in world.adj.items():
-        for v in neighbors:
-            if (u, v) not in closed and area[u] != area[v]:
-                a, b = area[u], area[v]
-                adj[a][b] = world.distance(centers[a], centers[b])
-    return Hierarchy(area, members, centers, adj,
-                     (time.perf_counter() - before) * 1000, closed)
+
+    graph = SimpleNamespace(
+        adj=world.adj, coords=world.coords, area=area
+    )
+
+    members, centers, adj = faaiz.build_region_graph(
+        graph, closed, distance=world.distance
+    )
+
+    return Hierarchy(
+        area, members, centers, adj,
+        (time.perf_counter() - before) * 1000, closed
+    )
 
 
 def region_search(world, hierarchy, start, goal):
-    """A* on the directed abstract graph with a consistent center heuristic.
-
-    Center distances are a corridor-selection surrogate, not detailed route
-    costs. The complete two-tier route need not be globally shortest.
-    """
     s, g = hierarchy.area[start], hierarchy.area[goal]
+
     if s == g:
         return [s], 0
+
+    return faaiz.region_search(
+        hierarchy.centers, hierarchy.adj, s, g,
+        distance=world.distance
+    )
 
     def h(r):
         return world.distance(hierarchy.centers[r], hierarchy.centers[g])
@@ -120,8 +121,17 @@ def two_tier_search(world, start, goal, blocked=(), *, hierarchy=None, collect_t
         allowed = None if regions is None else {
             n for region in regions for n in hierarchy.members[region]
         }
-        res = flat_astar(world, start, goal, closed, heuristic=world.heuristic(goal),
-                         allowed_nodes=allowed, collect_trace=collect_trace)
+        attempt_trace = [] if collect_trace else None
+
+        path, cost, expanded = faaiz.detailed_astar(
+            world, start, goal, closed, allowed,
+            heuristic=world.heuristic(goal), trace=attempt_trace
+        )
+
+        res = SearchResult(
+            path is not None, path or [], cost, expanded,
+            0.0, attempt_trace or []
+        )
         total_expanded += res.nodes_expanded
         traces.extend(res.trace)
         if res.found or regions is None:
