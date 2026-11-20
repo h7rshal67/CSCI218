@@ -120,9 +120,6 @@ class DemoHandler(BaseHTTPRequestHandler):
             "/harshal.js": ("web/harshal.js", "text/javascript; charset=utf-8"),
             "/harshal.css": ("web/harshal.css", "text/css; charset=utf-8"),
             "/": ("web/harshal.html", "text/html; charset=utf-8"),
-            "/reference.html": ("web/index.html", "text/html; charset=utf-8"),
-            "/app.js": ("web/app.js", "text/javascript; charset=utf-8"),
-            "/styles.css": ("web/styles.css", "text/css; charset=utf-8"),
             "/results/trials.csv": ("results/integrated/trials.csv", "text/csv"),
             "/results/summary.csv": ("results/integrated/summary.csv", "text/csv"),
         }

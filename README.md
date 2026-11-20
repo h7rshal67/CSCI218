@@ -106,8 +106,8 @@ on the machine and workload; rerunning the benchmark will change runtime values.
 | `experiments/mia_original_benchmark.py` | Preserved benchmark source and reused grid generator |
 | `tests/` | Algorithm and integration checks |
 
-Earlier reference interface files are preserved in `web/`; the default page
-is `harshal.html`. See `DEMO_GUIDE.md` for the presentation sequence and
+The demo interface is `web/harshal.html`, with its matching JavaScript and
+CSS files. See `DEMO_GUIDE.md` for the presentation sequence and
 `SOURCE_NOTES.md` for integration and attribution details.
 
 ## Team responsibilities
