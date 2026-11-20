@@ -4,9 +4,13 @@ pick the hubs, and split the map into one area per hub.
 
 Used by first_level_search.py (the big-picture search).
 Only the Python standard library is needed.
+
+Map data: (c) OpenStreetMap contributors, available under the Open Database
+License (ODbL) - https://www.openstreetmap.org/copyright
 """
 import math
 import heapq
+import warnings
 import xml.etree.ElementTree as ET
 
 # Road types a car can drive on (footways, paths, crossings etc. are ignored)
@@ -24,7 +28,10 @@ HUBS = {
     "Art House":            ("name", "Art House Dubai"),
     "Fishing Harbour":      ("name", "Jumeirah Fishing Harbour"),
     "Carrefour Market":     ("name", "Carrefour Market"),
-    "Mercato Mall":         ("name", "Mercato Shopping Mall"),
+    # "Mercato Shopping Mall" appears three times in the OSM file, two at (25.2156, 55.2510)
+    # and one at (25.2163, 55.2533). The third is the mall itself, so it is pinned here
+    # instead of letting the lookup pick one silently.
+    "Mercato Mall":         ("latlon", 25.2162583, 55.2532819),
     "Jumeirah Beach Centre": ("name", "Jumeriah Beach Cental Center"),   # spelled as in OSM
     "La Mer":               ("name", "La Mer"),
     "Port de La Mer":       ("name", "Port de La Mer"),
@@ -49,6 +56,8 @@ class RoadMap:
         self.adj = {}             # node id -> {neighbour id: metres}
         self.hub_node = {}        # hub name -> road node id it is snapped to
         self.hub_pos = {}         # hub name -> (lat, lon) of the real place
+        self.hub_snap_m = {}      # hub name -> metres from the real place to its road node
+        self.ambiguous_names = set()   # OSM names that appear at places > 20 m apart
         self.area = {}            # node id -> hub name (the area it belongs to)
         self._load(osm_path)
         self._keep_largest_connected_part()
@@ -59,22 +68,30 @@ class RoadMap:
     def _load(self, osm_path):
         root = ET.parse(osm_path).getroot()
         all_nodes = {}
-        named = {}                                   # name -> (lat, lon)
+        named = {}                                   # name -> (lat, lon), first one wins
+
+        def remember(name, pos):
+            """Keep the FIRST place with this name; note names that occur in several places."""
+            if name not in named:
+                named[name] = pos
+            elif haversine_m(*named[name], *pos) > 20:
+                self.ambiguous_names.add(name)
+
         for n in root.iter("node"):
             pos = (float(n.get("lat")), float(n.get("lon")))
             all_nodes[n.get("id")] = pos
             for t in n.findall("tag"):
                 if t.get("k") in ("name", "name:en"):
-                    named[t.get("v")] = pos
+                    remember(t.get("v"), pos)
         for w in root.iter("way"):
             tags = {t.get("k"): t.get("v") for t in w.findall("tag")}
             refs = [nd.get("ref") for nd in w.findall("nd")]
             for key in ("name", "name:en"):
-                if key in tags and tags[key] not in named and refs:
+                if key in tags and refs:
                     lats = [all_nodes[r][0] for r in refs if r in all_nodes]
                     lons = [all_nodes[r][1] for r in refs if r in all_nodes]
-                    if lats:
-                        named[tags[key]] = (sum(lats) / len(lats), sum(lons) / len(lons))
+                    if lats and tags.get("highway") not in DRIVABLE:   # roads are not hubs
+                        remember(tags[key], (sum(lats) / len(lats), sum(lons) / len(lons)))
             if tags.get("highway") not in DRIVABLE:
                 continue
             oneway = tags.get("oneway") in ("yes", "true", "1") or tags.get("junction") == "roundabout"
@@ -148,13 +165,24 @@ class RoadMap:
                 if spec[1] not in self._named:
                     print(f"  (warning) hub '{name}': '{spec[1]}' is not in this map - skipped")
                     continue
+                if spec[1] in self.ambiguous_names:
+                    warnings.warn(f"hub '{name}': the name '{spec[1]}' occurs at several places in the "
+                                  f"map; the first one is used. Pin it with ('latlon', lat, lon).")
                 lat, lon = self._named[spec[1]]
             else:
                 lat, lon = spec[1], spec[2]
             self.hub_pos[name] = (lat, lon)
             self.hub_node[name] = self.nearest_node(lat, lon)
+            self.hub_snap_m[name] = haversine_m(lat, lon, *self.coords[self.hub_node[name]])
         if len(self.hub_node) < 2:
             raise ValueError("Fewer than 2 hubs found - edit HUBS in osm_map.py for your map")
+        # two hubs on the same road node would silently lose one area in _make_areas
+        owner = {}
+        for name, node in self.hub_node.items():
+            if node in owner:
+                raise ValueError(f"hubs '{owner[node]}' and '{name}' snap to the same road node; "
+                                 f"move one of them in HUBS")
+            owner[node] = name
 
     def _make_areas(self):
         """Every road node belongs to the hub it is closest to BY ROAD (not straight line),

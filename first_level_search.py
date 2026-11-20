@@ -51,11 +51,19 @@ def first_level_search(road_map, hub_map, start, goal, use_heuristic=True):
     use_heuristic=False turns the guess off (plain Dijkstra) - handy for comparing.
     Returns a dict with the macro path and the numbers needed for the report."""
     t0 = time.perf_counter()
+    for name in (start, goal):
+        if name not in road_map.hub_node:
+            raise ValueError(f"unknown hub '{name}'. Hubs: {', '.join(sorted(road_map.hub_node))}")
 
     def guess(h):
+        """Straight-line distance between the two hubs' ROAD nodes. A road route between those
+        nodes can never be shorter, so the guess never overestimates (A* stays optimal).
+        Using the real place positions instead could overestimate by a few metres, because a
+        hub's road node can be up to ~150 m away from the place itself."""
         if not use_heuristic:
             return 0.0
-        return haversine_m(*road_map.hub_pos[h], *road_map.hub_pos[goal])
+        return haversine_m(*road_map.coords[road_map.hub_node[h]],
+                           *road_map.coords[road_map.hub_node[goal]])
 
     g = {start: 0.0}
     came = {}
