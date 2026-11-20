@@ -1,49 +1,114 @@
 # CSCI218 – Multi-Layered Search
 
-CSCI218 Foundations of Artificial Intelligence  
-Group Project: Topic 4 / Project H
+CSCI218 Foundations of Artificial Intelligence · Topic 4 / Project H
 
-## Project overview
+This project compares flat A* with two-tier search on the same directed graph.
+It includes a local browser demo, an OpenStreetMap road case, generated obstacle
+grids, closure scenarios, automated tests and repeated scaling experiments.
 
-This project compares two-tier pathfinding with flat A* search.
+## Run the demo
 
-The offline demo shows both methods on identical directed graphs, with
-route drawing, real expansion replay, closure scenarios and repeatable
-grid experiments. The road case uses the team's packaged Jumeirah OSM
-snapshot. Grids of increasing size retain the core Topic 4 evaluation.
+Requires Python 3.10 or later and a modern browser. No external Python packages,
+API keys or internet map downloads are needed.
 
-## Algorithms
+From this repository's folder:
 
-### Flat A*
-Searches the detailed map directly from the start to the goal.
+```powershell
+python demo.py
+```
 
-### Two-tier search
-First finds a route through abstract areas, then uses that route
-to guide searches in the detailed map.
+On Windows, you can also double-click `Start_Demo.bat`. The browser opens the
+current Harshal demo at http://127.0.0.1:8765. Keep the terminal open while using
+the page; press Ctrl+C there to stop the server.
 
-The implementation must handle valid maps beyond a single
-demonstration example.
+If the port is occupied, use `python demo.py --port 8766`. For a browser opened
+manually, use `http://127.0.0.1:8766/harshal.html`. Open the page through the
+Python server so it can request map and search data.
 
-## Reproducible evaluation
+## Use the controls
 
-Both approaches are tested on the same maps of increasing size.
+- **Dubai road network:** choose any of the eight named start/destination hubs.
+- **Obstacle grid:** choose 32×32, 64×64 or 128×128 and a seed from 0–9999.
+  The same size and seed reproduce the same map and endpoints.
+- **No closure:** compare the two routes on the original graph.
+- **Block the original shortest route:** close connections on a baseline route.
+  The road scenario searches for a feasible detour where possible.
+- **Close roads near the hub route:** road-only, 60 m closure around a point on
+  the first-level hub route. This may leave the flat shortest route unchanged.
+- **Isolate the start:** close its outgoing connections to demonstrate no route.
+- **Regions / Explored nodes:** show the base partition and actual detailed-node
+  expansion traces. The coloured traces are an overlay, not an animation.
 
-The comparison will measure:
-- Nodes expanded
-- Runtime
-- Path cost
+Click **Run comparison** after changing the endpoints or closure scenario.
+Blue is flat A*, dashed orange is two-tier and magenta marks closed connections.
+Road distances are metres; grid costs are four-way moves. Both searches receive
+identical graph data, endpoints, weights and directed closures.
 
-The integrated benchmark uses 32x32, 64x64 and 128x128 grids, seeds 0-9,
-one warm-up and ten measured repeats per method/map: 600 measured searches.
-Grid regions are 8x8 tiles split into connected components. Outputs include
-raw trials, means, sample standard deviations across per-map means and
-environment metadata.
+## Algorithms and measurements
 
-Query time includes the abstract query, corridor filtering and every
-detailed attempt. Common map loading and region-graph preprocessing are
-excluded and reported separately. Validation runs outside query timing.
-The two-tier method is approximate: it may return a longer route and may
-be slower. Results are displayed without assuming which method wins.
+Flat A* searches the full detailed graph. Two-tier first searches an abstract
+region graph, then searches the detailed graph inside the selected corridor.
+It widens the corridor and ultimately uses the full graph if a restricted
+search cannot find a route. Its route can be longer than the flat optimum.
+
+The table reports distance, detailed and abstract expansions, total expansions,
+query time, region preparation and detailed search attempts. Repeated detailed
+work across attempts is included. Query time includes abstract search, corridor
+filtering and detailed attempts. Map loading and region preparation are outside
+query time. Scenario construction and independent validation are also outside it.
+
+Every returned route is checked against open directed edges. The interactive
+flat baseline is independently checked against Dijkstra. A zero-length route
+is valid when the start and goal coincide. No-route results remain visible.
+
+## Tests and repeated experiments
+
+Run the Python tests:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+The current integrated suite contains 48 tests. The road, closure, grid and
+isolated-start views have also been checked in the browser.
+
+Run the full benchmark:
+
+```powershell
+python -m experiments.integrated_benchmark
+```
+
+It imports the same search implementations as the demo and runs 32×32, 64×64
+and 128×128 grids, ten seeds and ten measured repeats per method/map: **600
+measured searches**, plus one warm-up per method/map. Execution order alternates.
+Grid regions use 8×8 tiles split into connected components.
+
+Outputs are `results/integrated/trials.csv`, `summary.csv` and `metadata.json`.
+Every route is validated and flat costs are checked against independent BFS
+distances. Summary standard deviations are across the ten per-map means.
+`results/integrated/RESULTS.md` describes the packaged final run. Timings depend
+on the machine and workload; rerunning the benchmark will change runtime values.
+
+## Main files
+
+| File | Purpose |
+| --- | --- |
+| `demo.py` | Local server, shared search API and route validation |
+| `web/harshal.html` | Current demo controls, canvas and results table |
+| `web/harshal.css` | Current demo styling |
+| `web/harshal.js` | API requests, map/route drawing and result display |
+| `osm_map.py`, `first_level_search.py` | Humna's corrected map and hub-search code |
+| `flat_astar.py` | Tanisha's updated flat baseline with compatibility extensions |
+| `faaiz_two_tier_search.py` | Faaiz's corrected region and detailed search helpers |
+| `two_tier_search.py` | Shared road/grid adapter calling Faaiz's helpers |
+| `worlds.py` | Shared worlds, grid partitions and closure construction |
+| `experiments/integrated_benchmark.py` | Repeated evaluation of the integrated code |
+| `experiments/mia_original_benchmark.py` | Preserved benchmark source and reused grid generator |
+| `tests/` | Algorithm and integration checks |
+
+Earlier reference interface files are preserved in `web/`; the default page
+is `harshal.html`. See `DEMO_GUIDE.md` for the presentation sequence and
+`SOURCE_NOTES.md` for integration and attribution details.
 
 ## Team responsibilities
 
@@ -55,81 +120,18 @@ be slower. Results are displayed without assuming which method wins.
 | Mia | Experiments, results and charts | Executive Summary; Results |
 | Harshal | Visual demo and README | Implementation; Appendices |
 
-## Installation and running
+Commit actual contributions under each member's own identity, use clear
+messages, and review branch changes before merging into `main`. Earlier
+teammate reports/outputs describe their original code versions; use the final
+integrated measurements when discussing this demo.
 
-Requires Python 3.10 or later and a modern browser. There are no external
-Python packages, API keys or online map downloads.
+## Data source
 
-From the project folder:
+The road case uses the team-supplied `data/jumeirah.osm` extract, with 23,400
+nodes and 35,081 directed connections in the current loader. Road data is
+© OpenStreetMap contributors, licensed under the Open Database License:
+https://opendatacommons.org/licenses/odbl/1-0/.
+Attribution: https://www.openstreetmap.org/copyright.
 
-    python demo.py
-
-On Windows you can also double-click Start_Demo.bat. Keep the Python
-terminal open while using the demo. Press Ctrl+C there to stop it.
-If the browser does not open, visit http://127.0.0.1:8765.
-If that port is occupied, run:
-
-    python demo.py --port 0
-
-The terminal prints the chosen local URL.
-
-Run the tests:
-
-    python -m unittest discover -s tests -v
-
-Run the full benchmark independently:
-
-    python -m experiments.integrated_benchmark
-
-The browser's Run 600-search benchmark button uses the same runner.
-Results are written to results/integrated/trials.csv, summary.csv and
-metadata.json. Download links appear after a browser benchmark completes.
-
-## Demonstration controls
-
-- Switch between Dubai roads and obstacle grids.
-- Choose road start/destination hubs, or grid size and deterministic seed.
-- Compare no closure, an on-route closure, the original 60-m hub-route
-  closure, and a deliberately unreachable destination.
-- Use Replay search, region/exploration toggles, Fit map, Fit route and
-  mouse zoom/pan.
-- A route is checked against the open directed edges. Flat A* is also
-  checked against an independent Dijkstra search.
-
-See DEMO_GUIDE.md for a short rehearsal sequence.
-
-## Files and attribution
-
-| File | Purpose |
-| --- | --- |
-| demo.py | Local server, controls API and independent route validation |
-| flat_astar.py | Tanisha baseline with documented integration extensions |
-| two_tier_search.py | Adapted Faaiz corridor/widening/fallback strategy |
-| osm_map.py and first_level_search.py | Humna's unchanged supporting code |
-| worlds.py | Shared road/grid interface, connected grid areas and closures |
-| web/ | Browser interface and canvas drawing |
-| experiments/integrated_benchmark.py | Benchmarks the actual integrated algorithms |
-| experiments/mia_original_benchmark.py | Preserved Mia script; grid generator reused |
-| team_sources/ | Original Faaiz notebook and Tanisha baseline snapshot |
-| tests/ | Baseline and shared-map integration verification |
-
-SOURCE_NOTES.md documents source ownership, adaptation and metric boundaries.
-The supplied reports have not been edited.
-
-Road data is © OpenStreetMap contributors, licensed under the Open Database
-License: https://opendatacommons.org/licenses/odbl/1-0/
-Attribution: https://www.openstreetmap.org/copyright
-This is a static distance-based educational simulation.
-
-## Collaboration
-
-- Use a separate branch for each module.
-- Have a teammate review changes before merging into main.
-- Commit your own contributions under your own identity.
-- Use clear commit messages describing each change.
-
-## Current status
-
-Working offline demo and shared-map integration, ready for team review.
-24 automated baseline/integration tests pass.
-Original teammate outputs are preserved separately from integrated results.
+Grids are synthetic maps generated by project code; closures are simulated.
+This is an offline, distance-based educational demonstration.

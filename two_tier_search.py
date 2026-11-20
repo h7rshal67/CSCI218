@@ -1,9 +1,7 @@
 """Integrated two-tier search adapted from Faaiz's supplied notebook.
 
 Preserves his corridor -> neighbouring regions -> whole-map fallback strategy.
-Integration changes: uses the same World and Tanisha A* as the baseline,
-preserves directed closures, counts every attempt, and reports preprocessing
-and abstract expansions separately. It runs without online map downloads.
+Integration changes: calls Faaiz's helpers on the same World as flat A*
 """
 from __future__ import annotations
 

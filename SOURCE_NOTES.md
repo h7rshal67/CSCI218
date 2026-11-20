@@ -1,55 +1,59 @@
 # Source and integration notes
 
-| Source | Preserved work | Integration changes |
+| Source | Used work | Integration changes |
 | --- | --- | --- |
-| Humna, supplied inside Tanisha's ZIP | osm_map.py, first_level_search.py and data/jumeirah.osm | Map loader and hub search copied unchanged. Hub search is used only to reproduce the original hub-route closure. |
-| Tanisha, corrected complete ZIP | Full-road-network flat A*, original algorithm snapshot and baseline tests | Added optional map-specific heuristic, allowed-node corridor and real expansion trace. Updated real-map test data path for this layout. |
-| Faaiz, FAIZ Part.ipynb | Original notebook in team_sources | Adapted corridor selection, one-ring widening and whole-map fallback to the shared map interface. Removed online OSMnx loading and K-Means dependency from the integrated execution path. |
-| Mia, MIA CSCI218.zip | Original benchmark and CSVs | Reused deterministic grid generation. Added an integrated benchmark that imports the actual demo algorithms; grid regions are split into connected components. |
-| Demo integration prepared in this session for Harshal's review | demo.py, worlds.py, two_tier_search.py, web/, integration tests and running instructions | Local visual demo, closure controls, replay and repeatable shared-map experiments. These are integration edits, not untouched teammate submissions. |
+| Humna, corrected map handover | `osm_map.py`, `first_level_search.py`, `data/jumeirah.osm`, map-fix tests | Corrected hub placement, road map and first-level search are used by the shared road world. Hub search also constructs the original hub-route closure scenario. |
+| Tanisha, corrected flat A* handover | `flat_astar.py` and baseline tests | Retained the full-graph baseline; added compatibility argument aliases, a world-specific heuristic callback and a trace property for existing callers. |
+| Faaiz, corrected two-tier handover | `faaiz_two_tier_search.py` and its tests | Added optional distance/heuristic callbacks, detailed expansion tracing and a zero-cost start/goal fast path. The adapter calls the supplied region-graph, region-search and detailed-search helpers on the shared world. |
+| Mia, experiment handover | Deterministic grid generator and preserved original experiment materials | The integrated runner imports the actual final search modules, uses connected grid areas, repeats runs and validates outputs. Original measurements are retained separately. |
+| Harshal's demo/integration work, prepared with assistant help | `demo.py`, `worlds.py`, `two_tier_search.py`, `web/harshal.*`, integration checks and instructions | Shared road/grid API, canvas map and routes, closure controls, result table, source attribution and final repeated experiments. These are integration edits, not untouched teammate submissions. |
 
-## Behavioral differences from the original notebook
+## Search behaviour
 
-- Both algorithms use the identical directed adjacency map, endpoints, edge
-  lengths and directed closure set.
-- An abstract edge exists only where an open directed road/cell edge crosses
-  between areas. Center-to-center distances guide abstract corridor selection;
-  they are surrogate weights, not the final road-route length.
-- The abstract heuristic targets the destination area's center. Detailed A*
-  uses haversine distance for roads and Manhattan distance for grids.
-- Grid tiles are split into connected open components, including after a
-  closure. Eight-by-eight tiles may therefore create more than one area.
-- Corridor widening includes neighbouring areas. If restricted searches fail,
-  a whole-map fallback preserves reachability. Every detailed attempt is
-  counted. Abstract expansions and region preparation are reported separately.
-- Faaiz's independently downloaded graph and its old distances are not used.
-  The integrated road case uses the packaged map with 23,400 nodes.
+Both algorithms use the identical directed adjacency graph, endpoints, weights
+and directed closure set. Road heuristics use geographic distance; grid
+heuristics use Manhattan distance. The abstract graph has an edge only where
+an open detailed connection crosses between areas. Centre distances guide
+region selection; they are surrogate costs, not the final road-route length.
 
-## Metrics and boundaries
+Grid areas are 8×8 tiles split into connected components, also after closures
+when needed. The map's Regions overlay shows the original base partition.
+The adapter searches the selected corridor, widens to neighbouring regions if
+necessary, then falls back to the full graph. It counts every detailed attempt.
+Finding a route in the corridor does not guarantee the globally shortest route.
 
-An expansion is a non-stale priority-queue removal, including the destination.
-Start equals goal returns a zero-cost path with zero expansions. Repeat
-expansions across widening/fallback attempts are included.
+## Metrics
 
-Query timing includes region selection, construction of the permitted-node
-set and all detailed attempts. Region-graph preprocessing and common map
-loading are outside query timing and displayed separately. Independent
-Dijkstra/path validation and construction of the closure scenario are also
-outside query timing.
+An expansion is a non-stale queue removal, including the destination. A start
+equal to the goal returns a zero-cost path with zero expansions. Repeated
+expansions across detailed attempts are included. Abstract expansions are
+reported separately and added to the detailed count for total expansions.
 
-The benchmark reports mean values across ten maps and sample standard
-deviation of the ten per-map means, after ten measured repeats on each map.
+Query timing includes abstract search, permitted-node filtering and all
+detailed attempts. Region preparation and common map loading are outside query
+time. Closure construction and independent validation are outside it too.
+The current interactive page does not separately display common map-load time.
 
-## Data and contribution records
+The grid benchmark uses ten seeds and ten measured repeats at each of three
+sizes, with a warm-up and alternating method order. It reports means and sample
+standard deviations across the ten per-map means. Timings are environment
+dependent. Preprocessing is prepared once per map, then reused by its queries.
+The traces shown in the interactive view add recording work; benchmark queries
+do not collect traces. They exercise the same route algorithms.
 
-Road data is © OpenStreetMap contributors, available under the Open Database
-License (ODbL): https://opendatacommons.org/licenses/odbl/1-0/
-Attribution: https://www.openstreetmap.org/copyright
-The extract was supplied by the team; its original extraction date was not
-provided. Do not invent one.
+## Data and records
 
-Original report drafts have not been changed. The old images and benchmark
-outputs describe their original code/settings; they are not live-demo results.
-Keep actual Git commit evidence and acknowledge the assistant's involvement
-according to the assessment rules. Teammates should review their imported
-and adapted components, and record their own subsequent contributions.
+Road data comes from the team-supplied OpenStreetMap extract, not a responding
+company. It is © OpenStreetMap contributors under ODbL:
+https://opendatacommons.org/licenses/odbl/1-0/.
+Attribution: https://www.openstreetmap.org/copyright.
+The grid maps and closure scenarios are generated by code for this experiment.
+
+The final `results/integrated/source_hashes.json` records the source files used
+for the packaged experiment. Earlier screenshots, reports and benchmark outputs
+describe their original versions/settings. They are not interchangeable with
+the current measurements. This update does not edit teammate report drafts.
+
+Keep actual Git commit evidence and acknowledge assistant involvement according
+to the assessment rules. Teammates should review imported/adapted components
+and commit their own subsequent work under their own identities.
